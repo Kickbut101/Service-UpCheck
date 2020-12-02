@@ -1,7 +1,7 @@
 ﻿# Service up check
 # Going to probably just use some xml file for services to monitor. This would make it easier to add or remove without having to manipulate script
-# 1.0
-# 11-29-20
+# 1.1
+# 12-02-20
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $homeDir = "C:\Scripts\Service_UpCheck\"
@@ -61,16 +61,21 @@ function checkServices
 
                 # Check the connection, check headers
                 Try {$currentRequestResults = Invoke-WebRequest -uri "$URI" -method Head -TimeoutSec $($service.timeOutSeconds)}
-                Catch {$errorStatus = $($_ -match "\((\d{1,4})\)" | % {$matches[1]})}
+                Catch {$errorStatus = $($_ -match "\((\d{1,4})\)|(timed out)" | % {$matches[1]} | % {$matches[2]})}
 
                 # Save the results
-                if (!$service.expectedReturnCodes) # If we don't already define successcodes from the invoke-webrequest
+                if (!$service.$expectedReturnCodes) # If we don't already define successcodes from the invoke-webrequest
                     { 
                         If ($currentRequestResults.statuscode -eq '200') 
                             {
                                 $isRunning = "Running"
                                 $StatusCode = "200"
                             } 
+                        ElseIF ($errorStatus -like "*timed out*")
+                            {
+                                $isRunning = "Down"
+                                $StatusCode = "Connection timed out"
+                            }
                         ELSE 
                             {
                                 $isRunning = "Down"
@@ -90,8 +95,8 @@ function checkServices
                                 $StatusCode = "$errorStatus"
                             }
                     }
-                $servicesResults | Add-Member -MemberType NoteProperty -Name "ServiceName" -Value $Service.ServiceName
-                $servicesResults | Add-Member -MemberType NoteProperty -Name "ServiceIs" -Value $isRunning
+                $servicesResults | Add-Member -MemberType NoteProperty -Name "__ServiceName" -Value $Service.ServiceName
+                $servicesResults | Add-Member -MemberType NoteProperty -Name "_ServiceIs" -Value $isRunning
                 if (!!$($errorstatus)) {$servicesResults | Add-Member -MemberType NoteProperty -Name "StatusCode" -Value $StatusCode} ELSE {$servicesResults | Add-Member -MemberType NoteProperty -Name "StatusCode" -Value $($currentRequestResults.statuscode)}
                 $servicesResults | Add-Member -MemberType NoteProperty -Name "Machine" -Value $service.machineIPorName
                 $servicesResults | Add-Member -MemberType NoteProperty -Name "ConnectionTested" -Value $URI
