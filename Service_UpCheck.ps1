@@ -1,7 +1,6 @@
-﻿# Service up check
+﻿
+# Service up check
 # Going to probably just use some xml file for services to monitor. This would make it easier to add or remove without having to manipulate script
-# 1.1
-# 12-02-20
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $homeDir = "C:\Scripts\Service_UpCheck\"
@@ -61,10 +60,15 @@ function checkServices
 
                 # Check the connection, check headers
                 Try {$currentRequestResults = Invoke-WebRequest -uri "$URI" -method Head -TimeoutSec $($service.timeOutSeconds)}
-                Catch {$errorStatus = $($_ -match "\((\d{1,4})\)|(timed out)" | % {$matches[1]} | % {$matches[2]})}
+                Catch {
+                            $shush = $($_ -match "\((\d{1,4})\)|(timed out)")
+                            if ($matches[1] -ne $null) { $errorStatus = $matches[1] }
+                            Else { $errorStatus = $matches[2] }
+
+                      }
 
                 # Save the results
-                if (!$service.$expectedReturnCodes) # If we don't already define successcodes from the invoke-webrequest
+                if (!$service.expectedReturnCodes) # If we don't already define successcodes from the invoke-webrequest
                     { 
                         If ($currentRequestResults.statuscode -eq '200') 
                             {
@@ -110,5 +114,27 @@ function checkServices
         return($resultArray)
     }
 
+# Setup string for output in discord
+# Input: powershell object with results
+# Output: Output string of the results
+function setupString
+    {
+        param($resultsObject)
+        $allproperties = $resultsObject | Get-Member -Type Properties | % name | Sort-Object
+
+        [string]$outputString = ""
+
+        foreach ($service in $resultsObject)
+            {
+                Foreach ($property in $allproperties)
+                    {
+                        $outputString += "$($property): $($service.$property) `n"
+                    }
+                    $outputString += "`n"
+            }
+         return($outputString)   
+    }
+
 $xmlFileLoaded = loadXMLFile -xmlFileLocation $homeDir\$nameOfXMLFile
 $fullresults = checkServices -xmlFile $xmlFileLoaded
+$discordString = setupString -resultsObject $fullresults
